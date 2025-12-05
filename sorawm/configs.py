@@ -50,4 +50,3 @@ FRONTUI_DIST_DIR_ASSETS = FRONTUI_DIST_DIR / "assets"
 FRONTUI_DIST_DIR_ASSETS.mkdir(exist_ok=True, parents=True)
 
 FRONTUI_DIST_DIR_INDEX_HTML = FRONTUI_DIST_DIR / "index.html"
-

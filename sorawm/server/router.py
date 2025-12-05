@@ -27,10 +27,12 @@ async def process_upload_and_queue(
 async def get_queue_status() -> QueueStatusResponse:
     return await worker.get_queue_status()
 
+
 @router.post("/submit_remove_task")
 async def submit_remove_task(
-    background_tasks: BackgroundTasks, video: UploadFile = File(...),
-    cleaner_type: CleanerType = Query(default=CleanerType.LAMA)
+    background_tasks: BackgroundTasks,
+    video: UploadFile = File(...),
+    cleaner_type: CleanerType = Query(default=CleanerType.LAMA),
 ):
     task_id = await worker.create_task(cleaner_type)
     content = await video.read()

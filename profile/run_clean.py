@@ -22,10 +22,8 @@ def nvtx(msg: str):
 
 
 class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
-
     def clean(self, frames: np.ndarray, masks: np.ndarray) -> List[np.ndarray]:
         with nvtx("ProfileE2FGVIHDCleaner.clean_total"):
-
             with nvtx("setup_basic_params"):
                 video_length = len(frames)
                 chunk_size = int(self.config.chunk_size_ratio * video_length)
@@ -39,7 +37,9 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
 
             # Prepare binary masks for compositing
             with nvtx("prepare_binary_masks"):
-                binary_masks = np.expand_dims(masks > 0, axis=-1).astype(np.uint8)  # (T, H, W, 1)
+                binary_masks = np.expand_dims(masks > 0, axis=-1).astype(
+                    np.uint8
+                )  # (T, H, W, 1)
 
             comp_frames = [None] * video_length
             logger.debug(
@@ -47,9 +47,10 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
                 f"(chunk_size={chunk_size}, overlap={overlap_size})"
             )
 
-            for chunk_idx in tqdm(range(num_chunks), desc="Chunk", position=0, leave=True):
+            for chunk_idx in tqdm(
+                range(num_chunks), desc="Chunk", position=0, leave=True
+            ):
                 with nvtx(f"chunk_{chunk_idx:03d}_total"):
-
                     with nvtx("chunk_compute_indices"):
                         start_idx = chunk_idx * (chunk_size - overlap_size)
                         end_idx = min(start_idx + chunk_size, video_length)
@@ -58,7 +59,9 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
                     # Extract chunk data
                     with nvtx("chunk_extract_and_to_device"):
                         imgs_chunk = imgs_all[:, start_idx:end_idx, :, :, :].to(device)
-                        masks_chunk = masks_all[:, start_idx:end_idx, :, :, :].to(device)
+                        masks_chunk = masks_all[:, start_idx:end_idx, :, :, :].to(
+                            device
+                        )
                         frames_np_chunk = frames[start_idx:end_idx]
                         binary_masks_chunk = binary_masks[start_idx:end_idx]
 
@@ -99,7 +102,7 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
 if __name__ == "__main__":
     CMD = Path.cwd() / "profile"
 
-    masks_npy_path = CMD /  "masks.npy"
+    masks_npy_path = CMD / "masks.npy"
     frames_npy_path = CMD / "frames.npy"
 
     with nvtx("load_numpy_inputs"):
@@ -107,7 +110,7 @@ if __name__ == "__main__":
         frames = np.load(frames_npy_path)
 
     with nvtx("init_cleaner"):
-        cleaner = ProfileE2FGVIHDCleaner()  
+        cleaner = ProfileE2FGVIHDCleaner()
 
     with nvtx("run_cleaner"):
         cleaned_frames = cleaner.clean(frames, masks)

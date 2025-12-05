@@ -97,7 +97,7 @@ class WMRemoveTaskWorker:
         while True:
             task_uuid, video_path = await self.queue.get()
             self.current_task_id = task_uuid
-      
+
             # await
             logger.info(f"Processing task {task_uuid}: {video_path}")
             try:
@@ -190,49 +190,52 @@ class WMRemoveTaskWorker:
             return Path(task.output_path)
 
     async def get_queue_status(self) -> QueueStatusResponse:
-            """
-            获取队列状态，返回 Pydantic 模型
-            """
-            # 1. 获取内存中的实时状态快照
-            current_running = self.current_task_id
+        """
+        获取队列状态，返回 Pydantic 模型
+        """
+        # 1. 获取内存中的实时状态快照
+        current_running = self.current_task_id
 
-            waiting_list_schemas = []
+        waiting_list_schemas = []
 
-            async with get_session() as session:
-                stmt = select(Task).order_by(Task.created_at.desc()).limit(limit=-1)
+        async with get_session() as session:
+            stmt = select(Task).order_by(Task.created_at.desc()).limit(limit=-1)
 
-                result = await session.execute(stmt)
-                all_recent_tasks = result.scalars().all()
-                
-                for task in all_recent_tasks:
-                    if task.id == current_running:
-                        continue
+            result = await session.execute(stmt)
+            all_recent_tasks = result.scalars().all()
 
-                    waiting_list_schemas.append(
-                        QueueTaskInfo(
-                            id=task.id,
-                            status=task.status.value
-                            if hasattr(task.status, "value")
-                            else str(task.status),
-                            percentage=task.percentage,
-                            video_path=str(task.video_path),
-                            created_at=task.created_at,
-                        )
+            for task in all_recent_tasks:
+                if task.id == current_running:
+                    continue
+
+                waiting_list_schemas.append(
+                    QueueTaskInfo(
+                        id=task.id,
+                        status=task.status.value
+                        if hasattr(task.status, "value")
+                        else str(task.status),
+                        percentage=task.percentage,
+                        video_path=str(task.video_path),
+                        created_at=task.created_at,
                     )
+                )
 
-            real_queue_length = len([t for t in waiting_list_schemas if t.status == "QUEUED"])
-            is_busy = current_running is not None
+        real_queue_length = len(
+            [t for t in waiting_list_schemas if t.status == "QUEUED"]
+        )
+        is_busy = current_running is not None
 
-            summary = QueueSummary(
-                is_busy=is_busy,
-                queue_length=real_queue_length,
-                total_active=real_queue_length + (1 if is_busy else 0),
-            )
+        summary = QueueSummary(
+            is_busy=is_busy,
+            queue_length=real_queue_length,
+            total_active=real_queue_length + (1 if is_busy else 0),
+        )
 
-            return QueueStatusResponse(
-                summary=summary,
-                current_task_id=current_running,
-                waiting_queue=waiting_list_schemas,
-            )
+        return QueueStatusResponse(
+            summary=summary,
+            current_task_id=current_running,
+            waiting_queue=waiting_list_schemas,
+        )
+
 
 worker = WMRemoveTaskWorker()

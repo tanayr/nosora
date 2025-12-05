@@ -10,10 +10,7 @@ from sorawm.schemas import CleanerType
 
 
 class WaterMarkCleaner:
-    """工厂类：根据 cleaner_type 返回对应的 cleaner 实例"""
-
     def __new__(cls, cleaner_type: CleanerType):
-        """使用 __new__ 方法实现简单工厂模式"""
         match cleaner_type:
             case CleanerType.LAMA:
                 return LamaCleaner()

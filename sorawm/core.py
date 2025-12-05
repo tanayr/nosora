@@ -11,6 +11,7 @@ from sorawm.utils.imputation_utils import (
     find_2d_data_bkps,
     find_idxs_interval,
     get_interval_average_bbox,
+    refine_bkps_by_chunk_size,
 )
 from sorawm.utils.video_utils import VideoLoader, merge_frames_with_overlap
 from sorawm.watermark_cleaner import WaterMarkCleaner
@@ -226,9 +227,17 @@ class SoraWM:
             frame_counter = 0
             overlap_ratio = self.cleaner.config.overlap_ratio
             all_cleaned_frames = None
+            # The original bkps' sep maybe too large to excel the chunk_size, so we need to refine it based on the VRAM.
+            bkps_full = refine_bkps_by_chunk_size(bkps_full, self.cleaner.chunk_size)
             # Create overlapping segments for smooth transitions
             num_segments = len(bkps_full) - 1
-            for segment_idx in range(num_segments):
+            for segment_idx in tqdm(
+                range(num_segments),
+                desc="Segment",
+                position=0,
+                leave=True,
+                disable=quiet,
+            ):
                 seg_start = bkps_full[segment_idx]
                 seg_end = bkps_full[segment_idx + 1]
                 seg_length = seg_end - seg_start

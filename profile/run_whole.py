@@ -144,16 +144,12 @@ class ProfileSoraWM(SoraWM):
                 interval_bboxes = get_interval_average_bbox(bboxes, bkps_full)
                 missed_intervals = find_idxs_interval(detect_missed, bkps_full)
 
-                for missed_idx, interval_idx in zip(
-                    detect_missed, missed_intervals
-                ):
+                for missed_idx, interval_idx in zip(detect_missed, missed_intervals):
                     if (
                         interval_idx < len(interval_bboxes)
                         and interval_bboxes[interval_idx] is not None
                     ):
-                        frame_bboxes[missed_idx]["bbox"] = interval_bboxes[
-                            interval_idx
-                        ]
+                        frame_bboxes[missed_idx]["bbox"] = interval_bboxes[interval_idx]
                         if not quiet:
                             logger.debug(
                                 f"Filled missed frame {missed_idx} with bbox:\n"
@@ -213,9 +209,7 @@ class ProfileSoraWM(SoraWM):
                     frames = np.array(input_video_loader.get_slice(start, end))
                     frames = frames[:, :, :, ::-1].copy()
 
-                    masks = np.zeros(
-                        (len(frames), height, width), dtype=np.uint8
-                    )
+                    masks = np.zeros((len(frames), height, width), dtype=np.uint8)
                     for idx in range(start, end):
                         bbox = frame_bboxes[idx]["bbox"]
                         if bbox is not None:
@@ -258,13 +252,8 @@ class ProfileSoraWM(SoraWM):
                                 cleaned_frame_bgr.astype(np.uint8).tobytes()
                             )
                             frame_counter += 1
-                            if (
-                                progress_callback
-                                and frame_counter % 10 == 0
-                            ):
-                                progress = 50 + int(
-                                    (frame_counter / total_frames) * 45
-                                )
+                            if progress_callback and frame_counter % 10 == 0:
+                                progress = 50 + int((frame_counter / total_frames) * 45)
                                 progress_callback(progress)
 
                     range_pop()
@@ -279,7 +268,9 @@ class ProfileSoraWM(SoraWM):
 
             range_pop()
             range_push("merge audio track")
-            self.merge_audio_track(input_video_path, temp_output_path, output_video_path)
+            self.merge_audio_track(
+                input_video_path, temp_output_path, output_video_path
+            )
             range_pop()
 
 

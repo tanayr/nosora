@@ -36,11 +36,17 @@ class ProfileInpaintGenerator(InpaintGenerator):
                     align_corners=True,
                     recompute_scale_factor=True,
                 )
-                masked_local_frames = masked_local_frames.view(b, l_t, c, h // 4, w // 4)
+                masked_local_frames = masked_local_frames.view(
+                    b, l_t, c, h // 4, w // 4
+                )
 
             with nvtx("flow_prepare_pairs"):
-                mlf_1 = masked_local_frames[:, :-1, :, :, :].reshape(-1, c, h // 4, w // 4)
-                mlf_2 = masked_local_frames[:, 1:, :, :, :].reshape(-1, c, h // 4, w // 4)
+                mlf_1 = masked_local_frames[:, :-1, :, :, :].reshape(
+                    -1, c, h // 4, w // 4
+                )
+                mlf_2 = masked_local_frames[:, 1:, :, :, :].reshape(
+                    -1, c, h // 4, w // 4
+                )
 
             with nvtx("spynet_forward"):
                 pred_flows_forward = self.update_spynet(mlf_1, mlf_2)
@@ -49,8 +55,12 @@ class ProfileInpaintGenerator(InpaintGenerator):
                 pred_flows_backward = self.update_spynet(mlf_2, mlf_1)
 
             with nvtx("flow_reshape"):
-                pred_flows_forward = pred_flows_forward.view(b, l_t - 1, 2, h // 4, w // 4)
-                pred_flows_backward = pred_flows_backward.view(b, l_t - 1, 2, h // 4, w // 4)
+                pred_flows_forward = pred_flows_forward.view(
+                    b, l_t - 1, 2, h // 4, w // 4
+                )
+                pred_flows_backward = pred_flows_backward.view(
+                    b, l_t - 1, 2, h // 4, w // 4
+                )
 
             return pred_flows_forward, pred_flows_backward
 
@@ -75,7 +85,9 @@ class ProfileInpaintGenerator(InpaintGenerator):
                 ref_feat = enc_feat.view(b, t, c, h, w)[:, l_t:, ...]
 
             with nvtx("feat_prop_module"):
-                local_feat = self.feat_prop_module(local_feat, pred_flows[0], pred_flows[1])
+                local_feat = self.feat_prop_module(
+                    local_feat, pred_flows[0], pred_flows[1]
+                )
 
             with nvtx("concat_local_ref"):
                 enc_feat = torch.cat((local_feat, ref_feat), dim=1)
@@ -127,7 +139,6 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
         重新 override clean，保证总流程也能在 nsys 里看到。
         """
         with nvtx("ProfileE2FGVIHDCleaner.clean_total"):
-
             with nvtx("setup_basic_params"):
                 video_length = len(frames)
                 chunk_size = int(self.config.chunk_size_ratio * video_length)
@@ -147,9 +158,10 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
                 f"(chunk_size={chunk_size}, overlap={overlap_size})"
             )
 
-            for chunk_idx in tqdm(range(num_chunks), desc="Chunk", position=0, leave=True):
+            for chunk_idx in tqdm(
+                range(num_chunks), desc="Chunk", position=0, leave=True
+            ):
                 with nvtx(f"chunk_{chunk_idx:03d}_total"):
-
                     with nvtx("chunk_compute_indices"):
                         start_idx = chunk_idx * (chunk_size - overlap_size)
                         end_idx = min(start_idx + chunk_size, video_length)
@@ -157,7 +169,9 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
 
                     with nvtx("chunk_extract_and_to_device"):
                         imgs_chunk = imgs_all[:, start_idx:end_idx, :, :, :].to(device)
-                        masks_chunk = masks_all[:, start_idx:end_idx, :, :, :].to(device)
+                        masks_chunk = masks_all[:, start_idx:end_idx, :, :, :].to(
+                            device
+                        )
                         frames_np_chunk = frames[start_idx:end_idx]
                         binary_masks_chunk = binary_masks[start_idx:end_idx]
 
@@ -211,7 +225,6 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
             leave=False,
         ):
             with nvtx(f"window_f_{f:05d}_total"):
-
                 with nvtx("window_neighbor_ref_ids"):
                     neighbor_ids = [
                         i
@@ -261,10 +274,10 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
                     with nvtx("window_composite_back_to_frames"):
                         for i in range(len(neighbor_ids)):
                             idx = neighbor_ids[i]
-                            img = (
-                                np.array(pred_imgs[i]).astype(np.uint8)
-                                * binary_masks_chunk[idx]
-                                + frames_np_chunk[idx] * (1 - binary_masks_chunk[idx])
+                            img = np.array(pred_imgs[i]).astype(
+                                np.uint8
+                            ) * binary_masks_chunk[idx] + frames_np_chunk[idx] * (
+                                1 - binary_masks_chunk[idx]
                             )
 
                             if comp_frames_chunk[idx] is None:

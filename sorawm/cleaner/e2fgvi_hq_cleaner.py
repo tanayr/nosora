@@ -12,6 +12,8 @@ from sorawm.models.model.e2fgvi_hq import InpaintGenerator
 from sorawm.utils.devices_utils import get_device
 from sorawm.utils.download_utils import ensure_model_downloaded
 from sorawm.utils.video_utils import merge_frames_with_overlap
+from sorawm.utils.mem_utils import memory_profiling
+from sorawm.constants import CHUNK_SIZE_PER_GB_VRAM
 
 
 def get_ref_index(
@@ -85,6 +87,24 @@ class E2FGVIHDCleaner:
         self.model.load_state_dict(state)
         self.model.eval()
         self.config = config
+        self.profiling_chunk_size()
+
+    def profiling_chunk_size(self):
+        # memory_profiling
+        # 1GB can process about 5 frames in chunk size
+        memory_profiling_results = memory_profiling()
+        adapted_chunk_size = int(
+            memory_profiling_results.free_memory * CHUNK_SIZE_PER_GB_VRAM
+        )
+        self.adapted_chunk_size = adapted_chunk_size
+        logger.debug(
+            # keep two digit
+            f"Chunk size is set to {self.adapted_chunk_size} based on the free VRAM {round(memory_profiling_results.free_memory, 2)}GB"
+        )
+
+    @property
+    def chunk_size(self):
+        return self.adapted_chunk_size
 
     def process_frames_chunk(
         self,
@@ -101,8 +121,8 @@ class E2FGVIHDCleaner:
 
         for f in tqdm(
             range(0, chunk_length, neighbor_stride),
-            desc=f"  Frame progress",
-            position=1,
+            desc=f"    Frame progress",
+            position=2,
             leave=False,
         ):
             neighbor_ids = [
@@ -171,7 +191,9 @@ class E2FGVIHDCleaner:
             f"Processing {video_length} frames in {num_chunks} chunks (chunk_size={chunk_size}, overlap={overlap_size})"
         )
 
-        for chunk_idx in tqdm(range(num_chunks), desc="Chunk", position=0, leave=True):
+        for chunk_idx in tqdm(
+            range(num_chunks), desc="  Chunk", position=1, leave=False
+        ):
             start_idx = chunk_idx * (chunk_size - overlap_size)
             end_idx = min(start_idx + chunk_size, video_length)
             actual_chunk_size = end_idx - start_idx

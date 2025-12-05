@@ -5,7 +5,6 @@ from sorawm.server.router import router as backend_router
 from sorawm.server.front_router import router as front_router
 
 
-
 def init_app():
     app = FastAPI(lifespan=lifespan)
     app.include_router(backend_router, prefix="/api/v1")

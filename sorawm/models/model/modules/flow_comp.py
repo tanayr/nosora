@@ -71,7 +71,9 @@ class SPyNet(nn.Module):
         self.basic_module = nn.ModuleList([SPyNetBasicModule() for _ in range(6)])
 
         if use_pretrain:
-            ensure_model_downloaded(PHY_NET_CHECKPOINT_PATH, PHY_NET_CHECKPOINT_REMOTE_URL)
+            ensure_model_downloaded(
+                PHY_NET_CHECKPOINT_PATH, PHY_NET_CHECKPOINT_REMOTE_URL
+            )
             print("load pretrained SPyNet...")
             load_checkpoint(self, str(PHY_NET_CHECKPOINT_PATH), strict=True)
 
