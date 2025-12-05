@@ -11,6 +11,18 @@ from sorawm.schemas import CleanerType
 
 class WaterMarkCleaner:
     def __new__(cls, cleaner_type: CleanerType):
+        """
+        Create and return an instance of the specified cleaner implementation.
+        
+        Parameters:
+            cleaner_type (CleanerType): The cleaner implementation to create.
+        
+        Returns:
+            An instance of the corresponding cleaner class (for example, `LamaCleaner` or `E2FGVIHDCleaner`).
+        
+        Raises:
+            ValueError: If `cleaner_type` is not a recognized CleanerType.
+        """
         match cleaner_type:
             case CleanerType.LAMA:
                 return LamaCleaner()

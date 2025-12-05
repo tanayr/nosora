@@ -81,6 +81,23 @@ class SoraWM:
         progress_callback: Callable[[int], None] | None = None,
         quiet: bool = False,
     ):
+        """
+        Process a single input video by detecting watermarks, removing them using the configured cleaner, encoding the cleaned frames to a temporary video, and merging the original audio into the final output.
+        
+        The method performs these high-level steps:
+        - Detects watermark bounding boxes for each frame and fills missed detections by interval-based averaging or neighbor fallbacks.
+        - Depending on the configured cleaner strategy:
+          - For LAMA: cleans each frame individually using a binary mask for the detected bbox.
+          - For E2FGVI_HQ: processes frames in overlapping segments, cleans segments with the model, and blends overlaps.
+        - Streams cleaned frames to an FFmpeg process for H.264 encoding, then replaces the audio track from the original input into the final output file.
+        Progress updates are reported via the optional progress_callback at approximate stages (detection ≈10–50, cleaning ≈50–95, finalization ≈95–99).
+        
+        Parameters:
+            input_video_path (Path): Path to the source video to process.
+            output_video_path (Path): Path where the final cleaned video will be saved; intermediate temporary file is created alongside this path.
+            progress_callback (Callable[[int], None] | None): Optional callback invoked with integer progress percentages (0–100). The callback is called multiple times during detection, cleaning, and finalization to indicate approximate progress.
+            quiet (bool): When True suppresses debug logging and disables progress bars.
+        """
         input_video_loader = VideoLoader(input_video_path)
         output_video_path.parent.mkdir(parents=True, exist_ok=True)
         width = input_video_loader.width

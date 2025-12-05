@@ -25,6 +25,12 @@ async def process_upload_and_queue(
 
 @router.get("/get_queue_status")
 async def get_queue_status() -> QueueStatusResponse:
+    """
+    Retrieve the current status of the processing queue.
+    
+    Returns:
+        QueueStatusResponse: Current queue metrics and task states (e.g., counts and statuses of queued, running, and finished tasks).
+    """
     return await worker.get_queue_status()
 
 
@@ -34,6 +40,16 @@ async def submit_remove_task(
     video: UploadFile = File(...),
     cleaner_type: CleanerType = Query(default=CleanerType.LAMA),
 ):
+    """
+    Create a watermark-removal task for the provided video and schedule the file upload and queuing to run in the background.
+    
+    Parameters:
+        video (UploadFile): Incoming uploaded video file.
+        cleaner_type (CleanerType): Cleaner algorithm to use for the task; defaults to `CleanerType.LAMA`.
+    
+    Returns:
+        dict: A mapping containing `task_id` (the created task identifier) and `message` confirming submission.
+    """
     task_id = await worker.create_task(cleaner_type)
     content = await video.read()
     upload_filename = f"{uuid4()}_{video.filename}"

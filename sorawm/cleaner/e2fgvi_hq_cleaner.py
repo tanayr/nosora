@@ -20,6 +20,19 @@ def get_ref_index(
     frame_idx: int, neighbor_ids: List[int], length: int, ref_length: int, num_ref: int
 ) -> List[int]:
     # TODO: optimize the code later.
+    """
+    Compute reference frame indices to use for a given frame.
+    
+    Parameters:
+    	frame_idx (int): Index of the target frame around which references are selected.
+    	neighbor_ids (List[int]): Indices of neighbor frames that must be excluded from reference selection.
+    	length (int): Total number of frames in the sequence.
+    	ref_length (int): Step size (interval) between candidate reference frames.
+    	num_ref (int): Number of reference frames to select; if -1, select candidates across the entire sequence at intervals of `ref_length`.
+    
+    Returns:
+    	ref_index (List[int]): List of selected reference frame indices, spaced by `ref_length`, excluding any indices in `neighbor_ids`. When `num_ref` != -1, at most `num_ref` indices are returned and they are chosen from a window centered on `frame_idx`.
+    """
     ref_index = []
     if num_ref == -1:
         for i in range(0, length, ref_length):
@@ -81,6 +94,13 @@ class E2FGVIHDCleaner:
         ckpt_path: Path = E2FGVI_HQ_CHECKPOINT_PATH,
         config: E2FGVIHDConfig = E2FGVIHDConfig(),
     ):
+        """
+        Initialize the cleaner by ensuring the model checkpoint is available, loading the inpainting model onto the computation device, setting it to evaluation mode, storing the configuration, and profiling VRAM to determine the chunk size.
+        
+        Parameters:
+            ckpt_path (Path): Path to the model checkpoint file. Defaults to the configured E2FGVI-HQ checkpoint path and will be downloaded if missing.
+            config (E2FGVIHDConfig): Configuration for reference selection, neighbor stride, and chunking behavior used during processing.
+        """
         ensure_model_downloaded(ckpt_path, E2FGVI_HQ_CHECKPOINT_REMOTE_URL)
         self.model = InpaintGenerator().to(device)
         state = torch.load(ckpt_path, map_location=device)
@@ -92,6 +112,11 @@ class E2FGVIHDCleaner:
     def profiling_chunk_size(self):
         # memory_profiling
         # 1GB can process about 5 frames in chunk size
+        """
+        Set the instance's adapted_chunk_size based on available GPU VRAM.
+        
+        Profiles free device memory and computes adapted_chunk_size by multiplying the measured free memory (in GB) with CHUNK_SIZE_PER_GB_VRAM; stores the result in `self.adapted_chunk_size` and logs the chosen chunk size.
+        """
         memory_profiling_results = memory_profiling()
         adapted_chunk_size = int(
             memory_profiling_results.free_memory * CHUNK_SIZE_PER_GB_VRAM
@@ -104,6 +129,12 @@ class E2FGVIHDCleaner:
 
     @property
     def chunk_size(self):
+        """
+        Configured chunk size used for processing frames.
+        
+        Returns:
+            chunk_size (int): The adapted number of frames per chunk computed from available VRAM.
+        """
         return self.adapted_chunk_size
 
     def process_frames_chunk(
@@ -117,6 +148,22 @@ class E2FGVIHDCleaner:
         h: int,
         w: int,
     ) -> List[np.ndarray]:
+        """
+        Compose and return cleaned frames for a chunk by inpainting masked regions using neighboring and reference frames.
+        
+        Parameters:
+            chunk_length (int): Number of frames in the chunk.
+            neighbor_stride (int): Step between neighbor anchor frames processed within the chunk.
+            imgs_chunk (torch.Tensor): Tensor of input frames with shape (1, T_chunk, 3, H, W), normalized for the model (typically in [-1, 1]).
+            masks_chunk (torch.Tensor): Corresponding masks with shape (1, T_chunk, 1, H, W), values in [0, 1] where 1 indicates masked pixels.
+            binary_masks_chunk (np.ndarray): Binary masks used to blend predictions with originals; shape (chunk_length, H, W, 3) or (chunk_length, H, W) broadcastable to frames, dtype uint8 or {0,1}.
+            frames_np_chunk (np.ndarray): Original frames as uint8 numpy arrays with shape (chunk_length, H, W, 3).
+            h (int): Frame height.
+            w (int): Frame width.
+        
+        Returns:
+            List[np.ndarray]: List of length `chunk_length` containing the composited uint8 frames (H x W x 3) for processed indices; entries may be `None` for frames that were not covered/updated.
+        """
         comp_frames_chunk = [None] * chunk_length
 
         for f in tqdm(
@@ -175,6 +222,16 @@ class E2FGVIHDCleaner:
         return comp_frames_chunk
 
     def clean(self, frames: np.ndarray, masks: np.ndarray) -> List[np.ndarray]:
+        """
+        Clean a video by processing frames and masks in overlapping, memory-adaptive chunks and merging the inpainted results.
+        
+        Parameters:
+            frames (np.ndarray): Video frames as a (T, H, W, 3) uint8 array (RGB) where T is the number of frames.
+            masks (np.ndarray): Corresponding masks as a (T, H, W) uint8 array; non-zero values indicate masked pixels to be inpainted.
+        
+        Returns:
+            List[np.ndarray]: List of T cleaned frames as (H, W, 3) uint8 arrays (RGB), where each entry is the composited result for the corresponding input frame.
+        """
         video_length = len(frames)
         chunk_size = int(self.config.chunk_size_ratio * video_length)
         overlap_size = int(self.config.overlap_ratio * video_length)

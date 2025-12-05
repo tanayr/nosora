@@ -32,6 +32,16 @@ def get_interval_average_bbox(
 
 
 def find_idxs_interval(idxs: List[int], bkps: List[int]) -> List[int]:
+    """
+    Map each index in `idxs` to the interval defined by consecutive breakpoints in `bkps`.
+    
+    Parameters:
+        idxs (List[int]): Indices to map to breakpoint intervals.
+        bkps (List[int]): Sorted list of breakpoints; intervals are [bkps[i], bkps[i+1]) for i in [0, len(bkps)-2].
+    
+    Returns:
+        List[int]: For each input index, the interval index `i` such that `bkps[i] <= index < bkps[i+1]`. Indices outside the range are clamped to the nearest valid interval in [0, len(bkps)-2].
+    """
     def _find_idx_interval(_idx: int) -> int:
         left = 0
         right = len(bkps) - 2
@@ -54,6 +64,16 @@ def find_idxs_interval(idxs: List[int], bkps: List[int]) -> List[int]:
 
 
 def refine_bkps_by_chunk_size(bkps: List[int], chunk_size: int) -> List[int]:
+    """
+    Create a refined, sorted set of breakpoint indices by sampling each interval at a fixed step.
+    
+    Parameters:
+        bkps (List[int]): Ordered list of breakpoint indices defining consecutive intervals.
+        chunk_size (int): Step size used to sample indices within each interval; values are taken from range(start, end, chunk_size). Must be a positive integer.
+    
+    Returns:
+        List[int]: Sorted list of unique breakpoint indices including the first and each interval end, plus sampled points within intervals.
+    """
     result = set()
     for start, end in zip(bkps[:-1], bkps[1:]):
         result.update(range(start, end, chunk_size))

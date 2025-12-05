@@ -65,6 +65,17 @@ class SPyNet(nn.Module):
         use_pretrain=True,
         pretrained="https://download.openmmlab.com/mmediting/restorers/basicvsr/spynet_20210409-c6c1bd09.pth",
     ):
+        """
+        Initialize the SPyNet module, creating the six-level SPyNet basic modules and registering input normalization buffers.
+        
+        Parameters:
+            use_pretrain (bool): If True, attempt to download (if necessary) and load pretrained weights into this model.
+            pretrained (str): URL or local path to the pretrained checkpoint to use when `use_pretrain` is True.
+        
+        Notes:
+            - Constructs `self.basic_module` as a ModuleList of six SPyNetBasicModule instances.
+            - Registers `mean` and `std` buffers for input normalization.
+        """
         super().__init__()
         # TODO: make it local here.
 

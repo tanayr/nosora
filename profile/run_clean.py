@@ -23,6 +23,16 @@ def nvtx(msg: str):
 
 class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
     def clean(self, frames: np.ndarray, masks: np.ndarray) -> List[np.ndarray]:
+        """
+        Process frames and masks in overlapping temporal chunks, run per-chunk inpainting/propagation, and merge the chunk results into a final list of cleaned frames.
+        
+        Parameters:
+            frames (np.ndarray): Input video frames with time as the first dimension, e.g. shape (T, H, W, C) or a sequence where frames[0].shape == (H, W, C).
+            masks (np.ndarray): Corresponding masks with time as the first dimension, e.g. shape (T, H, W) or (T, H, W, 1). Nonzero pixels indicate regions to be processed.
+        
+        Returns:
+            List[np.ndarray]: A list of length T containing the cleaned/composted frames as numpy arrays with shape (H, W, C).
+        """
         with nvtx("ProfileE2FGVIHDCleaner.clean_total"):
             with nvtx("setup_basic_params"):
                 video_length = len(frames)

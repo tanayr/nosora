@@ -25,6 +25,19 @@ def nvtx(msg: str):
 
 class ProfileInpaintGenerator(InpaintGenerator):
     def forward_bidirect_flow(self, masked_local_frames):
+        """
+        Estimate bidirectional optical flows between consecutive frames in a local masked sequence.
+        
+        Parameters:
+            masked_local_frames (torch.Tensor): Input tensor of masked local frames with shape
+                (batch, time, channels, height, width).
+        
+        Returns:
+            tuple: A pair (pred_flows_forward, pred_flows_backward) where each is a torch.Tensor
+            of shape (batch, time - 1, 2, height // 4, width // 4). Each tensor contains 2D
+            optical flow vectors: `pred_flows_forward` maps each frame to the next (i -> i+1),
+            and `pred_flows_backward` maps each frame to the previous (i+1 -> i).
+        """
         with nvtx("InpaintGenerator.forward_bidirect_flow_total"):
             b, l_t, c, h, w = masked_local_frames.size()
 
@@ -65,6 +78,17 @@ class ProfileInpaintGenerator(InpaintGenerator):
             return pred_flows_forward, pred_flows_backward
 
     def forward(self, masked_frames, num_local_frames):
+        """
+        Run inpainting generator on a sequence of masked frames, producing reconstructed frames and bidirectional flow estimates.
+        
+        Parameters:
+            masked_frames (torch.Tensor): Tensor of shape (batch, time, channels, height, width) containing masked input frames (expected normalized to model range).
+            num_local_frames (int): Number of initial frames in each sequence treated as local (used for flow estimation and local feature propagation).
+        
+        Returns:
+            output (torch.Tensor): Reconstructed frames tensor of shape (batch * time, channels_out, height_out, width_out) with values in [-1, 1].
+            pred_flows (tuple): A pair (pred_flows_forward, pred_flows_backward) of tensors holding predicted optical flows for forward and backward directions; each has shape (batch, time-1, 2, h_flow, w_flow).
+        """
         with nvtx("InpaintGenerator.forward_total"):
             l_t = num_local_frames
             b, t, ori_c, ori_h, ori_w = masked_frames.size()
@@ -136,7 +160,16 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
 
     def clean(self, frames: np.ndarray, masks: np.ndarray) -> List[np.ndarray]:
         """
-        重新 override clean，保证总流程也能在 nsys 里看到。
+        Run the full cleaning pipeline on a video using chunked, overlapping processing and return reconstructed frames.
+        
+        Processes the input frames and masks in configurable chunks with overlap: converts inputs to tensors, runs per-chunk inpainting and fusion, merges chunk outputs handling overlaps, and returns the final list of cleaned frames in original order.
+        
+        Parameters:
+            frames (np.ndarray): Sequence of input RGB frames as a numpy array of shape (T, H, W, C) with values in [0, 255] or [0,1].
+            masks (np.ndarray): Corresponding mask array of shape (T, H, W) where nonzero values indicate regions to inpaint.
+        
+        Returns:
+            List[np.ndarray]: List of T reconstructed RGB frames as numpy arrays (H, W, C), in the same order as the input.
         """
         with nvtx("ProfileE2FGVIHDCleaner.clean_total"):
             with nvtx("setup_basic_params"):
@@ -216,6 +249,25 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
         h: int,
         w: int,
     ) -> List[np.ndarray]:
+        """
+        Compose inpainted frames for a chunk by running the model on sliding windows, blending predictions back into original frames.
+        
+        Parameters:
+        	chunk_length (int): Number of frames in the current chunk.
+        	neighbor_stride (int): Half-window radius (in frames) used to select neighboring frames around each reference; determines step between processed reference frames.
+        	imgs_chunk (torch.Tensor): Tensor of shape (1, T, C, H, W) containing chunk frames normalized for model input.
+        	masks_chunk (torch.Tensor): Tensor of shape (1, T, 1, H, W) containing corresponding masks where masked regions are 1.
+        	binary_masks_chunk (np.ndarray): Array of per-frame binary masks (H, W) or (H, W, 1) used for compositing predictions onto original frames (values 0/1).
+        	frames_np_chunk (np.ndarray): Original chunk frames as uint8 numpy arrays in shape (T, H, W, C).
+        	h (int): Original frame height.
+        	w (int): Original frame width.
+        
+        Returns:
+        	List[np.ndarray]: A list of length `chunk_length` where each entry is the reconstructed uint8 RGB frame with model predictions composited into unmasked regions; overlapping predictions are averaged.
+        
+        Raises:
+        	RuntimeError: Intentionally raises RuntimeError("Stop here") to terminate profiling at the profiling breakpoint.
+        """
         comp_frames_chunk = [None] * chunk_length
 
         for f in tqdm(
