@@ -31,6 +31,8 @@ This project provides an elegant way to remove the sora watermark in the sora2 g
     </td>
   </tr>
 </table>
+
+
 **Commercial Hosted Service & Sponsorship**
 
 >  If you prefer a one-click online service instead of running everything locally, you can use the hosted Sora watermark remover here:
