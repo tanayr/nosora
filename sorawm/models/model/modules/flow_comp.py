@@ -67,11 +67,11 @@ class SPyNet(nn.Module):
     ):
         """
         Initialize the SPyNet module, creating the six-level SPyNet basic modules and registering input normalization buffers.
-        
+
         Parameters:
             use_pretrain (bool): If True, attempt to download (if necessary) and load pretrained weights into this model.
             pretrained (str): URL or local path to the pretrained checkpoint to use when `use_pretrain` is True.
-        
+
         Notes:
             - Constructs `self.basic_module` as a ModuleList of six SPyNetBasicModule instances.
             - Registers `mean` and `std` buffers for input normalization.

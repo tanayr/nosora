@@ -3,8 +3,8 @@
 CUDA_VISIBLE_DEVICES=0 nsys profile \
   --trace=cuda,cublas,nvtx,osrt,cudnn \
   --force-overwrite=true \
-  -o profiling/profile_process_chunk \
-  python profile/run_process_chunk.py
+  -o profiling/profile_process_chunk_async \
+  python profile/run_process_chunk_async.py
 
 # 仅追踪 cuda 和 nvtx，不追踪 cudnn/cublas，也不追踪系统调用(osrt)
 # nsys profile \

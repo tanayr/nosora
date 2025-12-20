@@ -8,9 +8,9 @@ from sorawm.server.front_router import router as front_router
 def init_app():
     """
     Create and configure the FastAPI application with the application lifespan and route groups.
-    
+
     Includes the backend API router under the "/api/v1" prefix and the frontend router at the top level.
-    
+
     Returns:
         FastAPI: Configured FastAPI application instance.
     """

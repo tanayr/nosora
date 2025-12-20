@@ -50,3 +50,17 @@ FRONTUI_DIST_DIR_ASSETS = FRONTUI_DIST_DIR / "assets"
 FRONTUI_DIST_DIR_ASSETS.mkdir(exist_ok=True, parents=True)
 
 FRONTUI_DIST_DIR_INDEX_HTML = FRONTUI_DIST_DIR / "index.html"
+
+
+## TORCH COMPILE
+
+ENABLE_E2FGVI_HQ_TORCH_COMPILE = True
+
+TORCH_COMPILE_DIR = Path("~").expanduser() / ".cache" / "torch_compile"
+TORCH_COMPILE_DIR.mkdir(exist_ok=True, parents=True)
+
+E2FGVI_HQ_TORCH_COMPILE_DIR = TORCH_COMPILE_DIR / "e2fgvi_hq"
+E2FGVI_HQ_TORCH_COMPILE_DIR.mkdir(exist_ok=True, parents=True)
+
+E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS = E2FGVI_HQ_TORCH_COMPILE_DIR / "artifacts.bin"
+# artifacts

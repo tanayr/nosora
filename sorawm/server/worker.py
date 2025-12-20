@@ -95,7 +95,7 @@ class WMRemoveTaskWorker:
     async def run(self):
         """
         Continuously processes queued video cleaning tasks from the in-memory queue.
-        
+
         For each dequeued task this worker:
         - Sets the worker's current task id and marks the Task row as PROCESSING with 10% progress.
         - Ensures the active SoraWM instance matches the task's cleaner type and switches it if necessary.
@@ -103,7 +103,7 @@ class WMRemoveTaskWorker:
         - On success, marks the Task as FINISHED, sets percentage to 100, records the output_path and download_url.
         - On failure, marks the Task as ERROR and sets percentage to 0.
         - Always clears the current task id and calls queue.task_done() for the processed item.
-        
+
         Side effects: updates Task rows in the database, writes output files to the worker's output directory, and logs lifecycle events.
         """
         logger.info("Worker started, waiting for tasks...")
@@ -197,12 +197,12 @@ class WMRemoveTaskWorker:
     async def get_output_path(self, task_id: str) -> Path | None:
         """
         Retrieve the filesystem path to a task's finished output file.
-        
+
         Parameters:
-        	task_id (str): UUID of the task to look up.
-        
+                task_id (str): UUID of the task to look up.
+
         Returns:
-        	output_path (Path | None): `Path` to the task's output file, or `None` if the task does not exist or has no output recorded.
+                output_path (Path | None): `Path` to the task's output file, or `None` if the task does not exist or has no output recorded.
         """
         async with get_session() as session:
             result = await session.execute(select(Task).where(Task.id == task_id))
@@ -214,7 +214,7 @@ class WMRemoveTaskWorker:
     async def get_queue_status(self) -> QueueStatusResponse:
         """
         Provide a live snapshot of the task queue and current worker state.
-        
+
         Returns:
             QueueStatusResponse: A response containing a QueueSummary (is_busy, queue_length, total_active), the currently running task id (or None), and a list of QueueTaskInfo entries describing waiting tasks.
         """
