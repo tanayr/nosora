@@ -29,7 +29,7 @@ class MemoryProfilingResult:
 def clear_gpu_memory():
     """
     Release and reset GPU memory state used by CUDA and PyTorch.
-    
+
     Forces Python garbage collection, clears PyTorch's CUDA memory cache, resets CUDA peak-memory counters, and synchronizes the CUDA device so freed memory is available for subsequent operations.
     """
     gc.collect()
@@ -41,7 +41,7 @@ def clear_gpu_memory():
 def memory_profiling() -> MemoryProfilingResult:
     """
     Capture current CUDA memory metrics and return them in gibibytes.
-    
+
     Returns:
         MemoryProfilingResult: Dataclass containing:
             - free_memory (float): Available device memory in GiB.

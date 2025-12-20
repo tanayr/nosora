@@ -156,8 +156,6 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
             with nvtx("model_eval_mode"):
                 self.model.eval()
 
-            self.model = torch.compile(self.model)
-
             self.config = config
 
     def clean(self, frames: np.ndarray, masks: np.ndarray) -> List[np.ndarray]:
@@ -240,6 +238,112 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
 
         return comp_frames
 
+    # def process_frames_chunk(
+    #     self,
+    #     chunk_length: int,
+    #     neighbor_stride: int,
+    #     imgs_chunk: torch.Tensor,
+    #     masks_chunk: torch.Tensor,
+    #     binary_masks_chunk: np.ndarray,
+    #     frames_np_chunk: np.ndarray,
+    #     h: int,
+    #     w: int,
+    # ) -> List[np.ndarray]:
+    #     """
+    #     Compose inpainted frames for a chunk by running the model on sliding windows, blending predictions back into original frames.
+
+    #     Parameters:
+    #     	chunk_length (int): Number of frames in the current chunk.
+    #     	neighbor_stride (int): Half-window radius (in frames) used to select neighboring frames around each reference; determines step between processed reference frames.
+    #     	imgs_chunk (torch.Tensor): Tensor of shape (1, T, C, H, W) containing chunk frames normalized for model input.
+    #     	masks_chunk (torch.Tensor): Tensor of shape (1, T, 1, H, W) containing corresponding masks where masked regions are 1.
+    #     	binary_masks_chunk (np.ndarray): Array of per-frame binary masks (H, W) or (H, W, 1) used for compositing predictions onto original frames (values 0/1).
+    #     	frames_np_chunk (np.ndarray): Original chunk frames as uint8 numpy arrays in shape (T, H, W, C).
+    #     	h (int): Original frame height.
+    #     	w (int): Original frame width.
+
+    #     Returns:
+    #     	List[np.ndarray]: A list of length `chunk_length` where each entry is the reconstructed uint8 RGB frame with model predictions composited into unmasked regions; overlapping predictions are averaged.
+
+    #     Raises:
+    #     	RuntimeError: Intentionally raises RuntimeError("Stop here") to terminate profiling at the profiling breakpoint.
+    #     """
+    #     comp_frames_chunk = [None] * chunk_length
+
+    #     for f in tqdm(
+    #         range(0, chunk_length, neighbor_stride),
+    #         desc=f"  Frame progress",
+    #         position=1,
+    #         leave=False,
+    #     ):
+    #         with nvtx(f"window_f_{f:05d}_total"):
+    #             with nvtx("window_neighbor_ref_ids"):
+    #                 neighbor_ids = [
+    #                     i
+    #                     for i in range(
+    #                         max(0, f - neighbor_stride),
+    #                         min(chunk_length, f + neighbor_stride + 1),
+    #                     )
+    #                 ]
+    #                 ref_ids = get_ref_index(
+    #                     f,
+    #                     neighbor_ids,
+    #                     chunk_length,
+    #                     self.config.ref_length,
+    #                     self.config.num_ref,
+    #                 )
+
+    #             with nvtx("window_select_tensors"):
+    #                 selected_imgs = imgs_chunk[:1, neighbor_ids + ref_ids, :, :, :]
+    #                 selected_masks = masks_chunk[:1, neighbor_ids + ref_ids, :, :, :]
+
+    #             with torch.no_grad():
+    #                 with nvtx("window_apply_mask"):
+    #                     masked_imgs = selected_imgs * (1 - selected_masks)
+
+    #                 with nvtx("window_pad_flip_concat"):
+    #                     mod_size_h = 60
+    #                     mod_size_w = 108
+    #                     h_pad = (mod_size_h - h % mod_size_h) % mod_size_h
+    #                     w_pad = (mod_size_w - w % mod_size_w) % mod_size_w
+
+    #                     masked_imgs = torch.cat(
+    #                         [masked_imgs, torch.flip(masked_imgs, [3])], 3
+    #                     )[:, :, :, : h + h_pad, :]
+
+    #                     masked_imgs = torch.cat(
+    #                         [masked_imgs, torch.flip(masked_imgs, [4])], 4
+    #                     )[:, :, :, :, : w + w_pad]
+
+    #                 with nvtx("window_model_infer"):
+    #                     pred_imgs, _ = self.model(masked_imgs, len(neighbor_ids))
+
+    #                 with nvtx("window_crop_postprocess"):
+    #                     pred_imgs = pred_imgs[:, :, :h, :w]
+    #                     pred_imgs = (pred_imgs + 1) / 2
+    #                     pred_imgs = pred_imgs.cpu().permute(0, 2, 3, 1).numpy() * 255
+
+    #                 with nvtx("window_composite_back_to_frames"):
+    #                     for i in range(len(neighbor_ids)):
+    #                         idx = neighbor_ids[i]
+    #                         img = np.array(pred_imgs[i]).astype(
+    #                             np.uint8
+    #                         ) * binary_masks_chunk[idx] + frames_np_chunk[idx] * (
+    #                             1 - binary_masks_chunk[idx]
+    #                         )
+
+    #                         if comp_frames_chunk[idx] is None:
+    #                             comp_frames_chunk[idx] = img
+    #                         else:
+    #                             comp_frames_chunk[idx] = (
+    #                                 comp_frames_chunk[idx].astype(np.float32) * 0.5
+    #                                 + img.astype(np.float32) * 0.5
+    #                             )
+
+    #     # 你用来中断 profiling 的断点，保留
+    #     # raise RuntimeError("Stop here")
+    #     return comp_frames_chunk
+
     def process_frames_chunk(
         self,
         chunk_length: int,
@@ -251,34 +355,27 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
         h: int,
         w: int,
     ) -> List[np.ndarray]:
-        """
-        Compose inpainted frames for a chunk by running the model on sliding windows, blending predictions back into original frames.
-
-        Parameters:
-                chunk_length (int): Number of frames in the current chunk.
-                neighbor_stride (int): Half-window radius (in frames) used to select neighboring frames around each reference; determines step between processed reference frames.
-                imgs_chunk (torch.Tensor): Tensor of shape (1, T, C, H, W) containing chunk frames normalized for model input.
-                masks_chunk (torch.Tensor): Tensor of shape (1, T, 1, H, W) containing corresponding masks where masked regions are 1.
-                binary_masks_chunk (np.ndarray): Array of per-frame binary masks (H, W) or (H, W, 1) used for compositing predictions onto original frames (values 0/1).
-                frames_np_chunk (np.ndarray): Original chunk frames as uint8 numpy arrays in shape (T, H, W, C).
-                h (int): Original frame height.
-                w (int): Original frame width.
-
-        Returns:
-                List[np.ndarray]: A list of length `chunk_length` where each entry is the reconstructed uint8 RGB frame with model predictions composited into unmasked regions; overlapping predictions are averaged.
-
-        Raises:
-                RuntimeError: Intentionally raises RuntimeError("Stop here") to terminate profiling at the profiling breakpoint.
-        """
         comp_frames_chunk = [None] * chunk_length
 
-        for f in tqdm(
-            range(0, chunk_length, neighbor_stride),
-            desc=f"  Frame progress",
-            position=1,
-            leave=False,
+        # 创建用于数据传输的 stream
+        transfer_stream = torch.cuda.Stream()
+
+        # 用于存储上一轮的结果（异步传输中）
+        prev_pred_imgs_cpu = None
+        prev_neighbor_ids = None
+
+        all_windows = list(range(0, chunk_length, neighbor_stride))
+
+        for window_idx, f in enumerate(
+            tqdm(
+                all_windows,
+                desc=f"  Frame progress",
+                position=1,
+                leave=False,
+            )
         ):
             with nvtx(f"window_f_{f:05d}_total"):
+                # ============ 准备当前窗口数据 ============
                 with nvtx("window_neighbor_ref_ids"):
                     neighbor_ids = [
                         i
@@ -317,36 +414,84 @@ class ProfileE2FGVIHDCleaner(E2FGVIHDCleaner):
                             [masked_imgs, torch.flip(masked_imgs, [4])], 4
                         )[:, :, :, :, : w + w_pad]
 
+                    # ============ 模型推理 (默认 stream) ============
                     with nvtx("window_model_infer"):
-                        # GPU ops
                         pred_imgs, _ = self.model(masked_imgs, len(neighbor_ids))
+
+                    # ============ GPU 上的后处理 ============
+                    with nvtx("window_crop_postprocess_gpu"):
                         pred_imgs = pred_imgs[:, :, :h, :w]
                         pred_imgs = (pred_imgs + 1) / 2
-                    with nvtx("D2H"):
-                        # IO ops
-                        pred_imgs = pred_imgs.cpu().permute(0, 2, 3, 1).numpy() * 255
+                        pred_imgs = pred_imgs.permute(0, 2, 3, 1) * 255
 
-                    with nvtx("window_composite_back_to_frames"):
-                        for i in range(len(neighbor_ids)):
-                            idx = neighbor_ids[i]
-                            img = np.array(pred_imgs[i]).astype(
-                                np.uint8
-                            ) * binary_masks_chunk[idx] + frames_np_chunk[idx] * (
-                                1 - binary_masks_chunk[idx]
+                    # 记录当前计算完成的事件
+                    compute_done = torch.cuda.Event()
+                    compute_done.record()
+
+                    # ============ 处理上一轮的结果 (如果有) ============
+                    if prev_pred_imgs_cpu is not None:
+                        with nvtx("window_composite_prev"):
+                            # 等待上一轮传输完成
+                            transfer_stream.synchronize()
+
+                            # 在 CPU 上合成上一轮的帧
+                            self._composite_frames(
+                                prev_pred_imgs_cpu,
+                                prev_neighbor_ids,
+                                binary_masks_chunk,
+                                frames_np_chunk,
+                                comp_frames_chunk,
                             )
 
-                            if comp_frames_chunk[idx] is None:
-                                comp_frames_chunk[idx] = img
-                            else:
-                                comp_frames_chunk[idx] = (
-                                    comp_frames_chunk[idx].astype(np.float32) * 0.5
-                                    + img.astype(np.float32) * 0.5
-                                )
+                    # ============ 异步传输当前结果到 CPU ============
+                    with nvtx("window_async_transfer"):
+                        # 确保计算完成后再传输
+                        transfer_stream.wait_event(compute_done)
 
-        # 你用来中断 profiling 的断点，保留
-        raise RuntimeError("Stop here")
+                        with torch.cuda.stream(transfer_stream):
+                            # 使用 non_blocking=True 异步传输
+                            # 先转到 pinned memory 的 tensor
+                            pred_imgs_cpu = pred_imgs.cpu().numpy()
+
+                        # 保存给下一轮处理
+                        prev_pred_imgs_cpu = pred_imgs_cpu
+                        prev_neighbor_ids = neighbor_ids.copy()
+
+        # ============ 处理最后一轮的结果 ============
+        if prev_pred_imgs_cpu is not None:
+            transfer_stream.synchronize()
+            self._composite_frames(
+                prev_pred_imgs_cpu,
+                prev_neighbor_ids,
+                binary_masks_chunk,
+                frames_np_chunk,
+                comp_frames_chunk,
+            )
 
         return comp_frames_chunk
+
+    def _composite_frames(
+        self,
+        pred_imgs_np: np.ndarray,
+        neighbor_ids: List[int],
+        binary_masks_chunk: np.ndarray,
+        frames_np_chunk: np.ndarray,
+        comp_frames_chunk: List[np.ndarray],
+    ):
+        """将预测结果合成到原始帧上"""
+        for i in range(len(neighbor_ids)):
+            idx = neighbor_ids[i]
+            img = np.array(pred_imgs_np[i]).astype(np.uint8) * binary_masks_chunk[
+                idx
+            ] + frames_np_chunk[idx] * (1 - binary_masks_chunk[idx])
+
+            if comp_frames_chunk[idx] is None:
+                comp_frames_chunk[idx] = img
+            else:
+                comp_frames_chunk[idx] = (
+                    comp_frames_chunk[idx].astype(np.float32) * 0.5
+                    + img.astype(np.float32) * 0.5
+                )
 
 
 if __name__ == "__main__":

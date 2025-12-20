@@ -16,14 +16,19 @@ from sorawm.utils.imputation_utils import (
 from sorawm.utils.video_utils import VideoLoader, merge_frames_with_overlap
 from sorawm.watermark_cleaner import WaterMarkCleaner
 from sorawm.watermark_detector import SoraWaterMarkDetector
+from sorawm.configs import ENABLE_E2FGVI_HQ_TORCH_COMPILE
 
 VIDEO_EXTENSIONS = [".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm"]
 
 
 class SoraWM:
-    def __init__(self, cleaner_type: CleanerType = CleanerType.LAMA):
+    def __init__(
+        self,
+        cleaner_type: CleanerType = CleanerType.LAMA,
+        enable_torch_compile=ENABLE_E2FGVI_HQ_TORCH_COMPILE,
+    ):
         self.detector = SoraWaterMarkDetector()
-        self.cleaner = WaterMarkCleaner(cleaner_type)
+        self.cleaner = WaterMarkCleaner(cleaner_type, enable_torch_compile)
         self.cleaner_type = cleaner_type
 
     def run_batch(
@@ -83,7 +88,7 @@ class SoraWM:
     ):
         """
         Process a single input video by detecting watermarks, removing them using the configured cleaner, encoding the cleaned frames to a temporary video, and merging the original audio into the final output.
-        
+
         The method performs these high-level steps:
         - Detects watermark bounding boxes for each frame and fills missed detections by interval-based averaging or neighbor fallbacks.
         - Depending on the configured cleaner strategy:
@@ -91,7 +96,7 @@ class SoraWM:
           - For E2FGVI_HQ: processes frames in overlapping segments, cleans segments with the model, and blends overlaps.
         - Streams cleaned frames to an FFmpeg process for H.264 encoding, then replaces the audio track from the original input into the final output file.
         Progress updates are reported via the optional progress_callback at approximate stages (detection ≈10–50, cleaning ≈50–95, finalization ≈95–99).
-        
+
         Parameters:
             input_video_path (Path): Path to the source video to process.
             output_video_path (Path): Path where the final cleaned video will be saved; intermediate temporary file is created alongside this path.

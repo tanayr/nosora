@@ -8,11 +8,11 @@ from typing import Dict, List
 def validate_args_and_show_help():
     """
     Parse CLI arguments, validate the input folder, and return resolved paths and parsed args.
-    
+
     Parses command-line options for input, output, pattern, quiet, and model; converts input and output to resolved Path objects and validates that the input path exists and is a directory. Exits the process with code 1 if the input path is missing or not a directory.
-    
+
     Returns:
-        (input_folder, output_folder, args): 
+        (input_folder, output_folder, args):
             input_folder (Path): Resolved Path to the input directory.
             output_folder (Path): Resolved Path to the output directory.
             args (argparse.Namespace): Parsed command-line arguments.
@@ -98,7 +98,7 @@ def main():
     # Validate arguments BEFORE loading heavy dependencies (ffmpeg, torch, etc.)
     """
     Orchestrate CLI argument validation, lazy-load heavy dependencies, and run the batch video processing workflow.
-    
+
     Validates and processes command-line arguments, imports runtime-only dependencies, selects the watermark removal model, constructs and runs the batch processor, and handles termination: exits with code 130 on user interrupt and with code 1 on other fatal errors.
     """
     input_folder, output_folder, args = validate_args_and_show_help()
@@ -154,11 +154,15 @@ def main():
         """Batch video processor with progress tracking"""
 
         def __init__(
-            self, input_folder: Path, output_folder: Path, pattern: str = "*.mp4", cleaner_type: CleanerType = CleanerType.LAMA
+            self,
+            input_folder: Path,
+            output_folder: Path,
+            pattern: str = "*.mp4",
+            cleaner_type: CleanerType = CleanerType.LAMA,
         ):
             """
             Initialize the batch processor with paths, file-matching pattern, and watermark cleaner selection.
-            
+
             Parameters:
                 input_folder (Path): Directory containing videos to process.
                 output_folder (Path): Directory where cleaned videos will be written.
@@ -401,8 +405,12 @@ def main():
 
     # Create processor and run
     try:
-        cleaner_type = CleanerType.LAMA if args.model == "lama" else CleanerType.E2FGVI_HQ
-        processor = BatchProcessorImpl(input_folder, output_folder, pattern, cleaner_type)
+        cleaner_type = (
+            CleanerType.LAMA if args.model == "lama" else CleanerType.E2FGVI_HQ
+        )
+        processor = BatchProcessorImpl(
+            input_folder, output_folder, pattern, cleaner_type
+        )
         processor.process_batch()
     except KeyboardInterrupt:
         console.print()

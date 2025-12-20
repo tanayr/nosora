@@ -7,7 +7,12 @@ from loguru import logger
 from pydantic import BaseModel
 from tqdm import tqdm
 
-from sorawm.configs import E2FGVI_HQ_CHECKPOINT_PATH, E2FGVI_HQ_CHECKPOINT_REMOTE_URL
+from sorawm.configs import (
+    E2FGVI_HQ_CHECKPOINT_PATH,
+    E2FGVI_HQ_CHECKPOINT_REMOTE_URL,
+    ENABLE_E2FGVI_HQ_TORCH_COMPILE,
+    E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS,
+)
 from sorawm.models.model.e2fgvi_hq import InpaintGenerator
 from sorawm.utils.devices_utils import get_device
 from sorawm.utils.download_utils import ensure_model_downloaded
@@ -22,16 +27,16 @@ def get_ref_index(
     # TODO: optimize the code later.
     """
     Compute reference frame indices to use for a given frame.
-    
+
     Parameters:
-    	frame_idx (int): Index of the target frame around which references are selected.
-    	neighbor_ids (List[int]): Indices of neighbor frames that must be excluded from reference selection.
-    	length (int): Total number of frames in the sequence.
-    	ref_length (int): Step size (interval) between candidate reference frames.
-    	num_ref (int): Number of reference frames to select; if -1, select candidates across the entire sequence at intervals of `ref_length`.
-    
+        frame_idx (int): Index of the target frame around which references are selected.
+        neighbor_ids (List[int]): Indices of neighbor frames that must be excluded from reference selection.
+        length (int): Total number of frames in the sequence.
+        ref_length (int): Step size (interval) between candidate reference frames.
+        num_ref (int): Number of reference frames to select; if -1, select candidates across the entire sequence at intervals of `ref_length`.
+
     Returns:
-    	ref_index (List[int]): List of selected reference frame indices, spaced by `ref_length`, excluding any indices in `neighbor_ids`. When `num_ref` != -1, at most `num_ref` indices are returned and they are chosen from a window centered on `frame_idx`.
+        ref_index (List[int]): List of selected reference frame indices, spaced by `ref_length`, excluding any indices in `neighbor_ids`. When `num_ref` != -1, at most `num_ref` indices are returned and they are chosen from a window centered on `frame_idx`.
     """
     ref_index = []
     if num_ref == -1:
@@ -86,6 +91,7 @@ class E2FGVIHDConfig(BaseModel):
     neighbor_stride: int = 5
     chunk_size_ratio: float = 0.2  # TODO: this can be adjust as the VRAM
     overlap_ratio: int = 0.05
+    enable_torch_compile: bool = ENABLE_E2FGVI_HQ_TORCH_COMPILE
 
 
 class E2FGVIHDCleaner:
@@ -96,7 +102,7 @@ class E2FGVIHDCleaner:
     ):
         """
         Initialize the cleaner by ensuring the model checkpoint is available, loading the inpainting model onto the computation device, setting it to evaluation mode, storing the configuration, and profiling VRAM to determine the chunk size.
-        
+
         Parameters:
             ckpt_path (Path): Path to the model checkpoint file. Defaults to the configured E2FGVI-HQ checkpoint path and will be downloaded if missing.
             config (E2FGVIHDConfig): Configuration for reference selection, neighbor stride, and chunking behavior used during processing.
@@ -108,13 +114,44 @@ class E2FGVIHDCleaner:
         self.model.eval()
         self.config = config
         self.profiling_chunk_size()
+        self.auto_compile()
+
+    def auto_compile(self):
+        if self.config.enable_torch_compile:
+            try:
+                if E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS.exists():
+                    logger.info(
+                        f"Loading cached torch compile artifacts from {E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS}"
+                    )
+                    artifact_bytes = E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS.read_bytes()
+                    torch.compiler.load_cache_artifacts(artifact_bytes)
+                    self.model = torch.compile(self.model)
+
+                else:
+                    logger.info(
+                        f"Compiling model and saving artifacts to {E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS}"
+                    )
+                    self.model = torch.compile(self.model)
+                    # logger.debug(f"Compiled model: {self.model}")
+                    artifacts = torch.compiler.save_cache_artifacts()
+                    if artifacts is not None:
+                        artifact_bytes, cache_info = artifacts
+                        E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS.write_bytes(artifact_bytes)
+
+            except Exception as e:
+                logger.warning(
+                    f"Device not support torch compile, or compile failed: {e}. using the original model instead."
+                )
+                from traceback import format_exc
+
+                logger.error(format_exc())
 
     def profiling_chunk_size(self):
         # memory_profiling
         # 1GB can process about 5 frames in chunk size
         """
         Set the instance's adapted_chunk_size based on available GPU VRAM.
-        
+
         Profiles free device memory and computes adapted_chunk_size by multiplying the measured free memory (in GB) with CHUNK_SIZE_PER_GB_VRAM; stores the result in `self.adapted_chunk_size` and logs the chosen chunk size.
         """
         memory_profiling_results = memory_profiling()
@@ -131,7 +168,7 @@ class E2FGVIHDCleaner:
     def chunk_size(self):
         """
         Configured chunk size used for processing frames.
-        
+
         Returns:
             chunk_size (int): The adapted number of frames per chunk computed from available VRAM.
         """
@@ -150,7 +187,7 @@ class E2FGVIHDCleaner:
     ) -> List[np.ndarray]:
         """
         Compose and return cleaned frames for a chunk by inpainting masked regions using neighboring and reference frames.
-        
+
         Parameters:
             chunk_length (int): Number of frames in the chunk.
             neighbor_stride (int): Step between neighbor anchor frames processed within the chunk.
@@ -160,7 +197,7 @@ class E2FGVIHDCleaner:
             frames_np_chunk (np.ndarray): Original frames as uint8 numpy arrays with shape (chunk_length, H, W, 3).
             h (int): Frame height.
             w (int): Frame width.
-        
+
         Returns:
             List[np.ndarray]: List of length `chunk_length` containing the composited uint8 frames (H x W x 3) for processed indices; entries may be `None` for frames that were not covered/updated.
         """
@@ -224,11 +261,11 @@ class E2FGVIHDCleaner:
     def clean(self, frames: np.ndarray, masks: np.ndarray) -> List[np.ndarray]:
         """
         Clean a video by processing frames and masks in overlapping, memory-adaptive chunks and merging the inpainted results.
-        
+
         Parameters:
             frames (np.ndarray): Video frames as a (T, H, W, 3) uint8 array (RGB) where T is the number of frames.
             masks (np.ndarray): Corresponding masks as a (T, H, W) uint8 array; non-zero values indicate masked pixels to be inpainted.
-        
+
         Returns:
             List[np.ndarray]: List of T cleaned frames as (H, W, 3) uint8 arrays (RGB), where each entry is the composited result for the corresponding input frame.
         """

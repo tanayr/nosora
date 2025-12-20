@@ -239,3 +239,18 @@ frontend/node_modules
 *.qdstrm
 # profile/profile_e2fgvi_hq.nsys-rep
 *.npy
+profiling/
+
+profile/*.qdrep
+profile/*.nsys-rep
+profile/*.qdstrm
+profile/*.sqlite
+profile/*.trace
+profile/*.trace.json
+profile/*.trace.json.gz
+profile/*.trace.json.gz.part
+profile/*.trace.json.gz.part.1
+profile/*.trace.json.gz.part.2
+profile/*.trace.json.gz.part.3
+profile/*.trace.json.gz.part.4
+profile/*.trace.json.gz.part.5
