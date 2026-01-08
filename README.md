@@ -142,17 +142,19 @@ Simply download, extract, and run!
 
 We provide several options to speed up processing:
 
-| Detector | Batch | Cleaner | TorchCompile | Time (s) | Speedup |
-|:--------:|:-----:|:-------:|:------------:|:--------:|:-------:|
-| YOLO     | ×     | LAMA    | ×            | 44.33    | -       |
-| YOLO     | ×     | E2FGVI  | ×            | 142.42   | 1.00×   |
-| YOLO     | ×     | E2FGVI  | ✓            | 117.19   | 1.22×   |
-| YOLO     | 4     | E2FGVI  | ✓            | 82.63    | 1.72×   |
+| Detector | Batch | Cleaner | TorchCompile | Bf16 | Time (s) | Speedup |
+|:--------:|:-----:|:-------:|:------------:|:----:|:--------:|:-------:|
+| YOLO     | ×     | LAMA    | ×            | ×    | 44.33    | -       |
+| YOLO     | ×     | E2FGVI  | ×            | ×    | 142.42   | 1.00×   |
+| YOLO     | ×     | E2FGVI  | ✓            | ×    | 117.19   | 1.22×   |
+| YOLO     | 4     | E2FGVI  | ✓            | ×    | 82.63    | 1.72×   |
+| YOLO     | 4     | E2FGVI  | ✓            | ✓    | 58.60    | 2.43×   |
 
 > Speedup is calculated relative to the E2FGVI baseline. LAMA uses a different cleaning approach and is not directly comparable.
 
 - **YOLO Batch Detection**: Default batch size is 4 (`detect_batch_size=4`), enables batch inference for watermark detection, provides ~40% speedup
 - **TorchCompile** (E2FGVI only): Enabled by default (`enable_torch_compile=True`), provides ~22% speedup
+- **Bf16 Inference** (E2FGVI only): Enable with `use_bf16=True`(Default False), provides up to **2.43× speedup**. Note: quality may slightly decrease, and the first inference will be slow (~90s) due to compilation overhead; subsequent runs will be much faster (~58s) as artifacts are cached.
 
 You can customize these settings when initializing `SoraWM`:
 
@@ -171,6 +173,14 @@ sora_wm = SoraWM(
     cleaner_type=CleanerType.E2FGVI_HQ,
     enable_torch_compile=True,  # default: True
     detect_batch_size=8         # custom batch size
+)
+
+# E2FGVI_HQ with bf16 for maximum speed (may have slight quality loss)
+sora_wm = SoraWM(
+    cleaner_type=CleanerType.E2FGVI_HQ,
+    enable_torch_compile=True,
+    detect_batch_size=4,
+    use_bf16=True  # enables bfloat16 inference
 )
 ```
 

@@ -12,6 +12,7 @@ from sorawm.configs import (
     E2FGVI_HQ_CHECKPOINT_REMOTE_URL,
     ENABLE_E2FGVI_HQ_TORCH_COMPILE,
     E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS,
+    E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS_BF16,
 )
 from sorawm.models.model.e2fgvi_hq import InpaintGenerator
 from sorawm.utils.devices_utils import get_device
@@ -92,6 +93,7 @@ class E2FGVIHDConfig(BaseModel):
     chunk_size_ratio: float = 0.2  # TODO: this can be adjust as the VRAM
     overlap_ratio: int = 0.05
     enable_torch_compile: bool = ENABLE_E2FGVI_HQ_TORCH_COMPILE
+    use_bf16: bool = False  # Enable bf16 inference for faster processing
 
 
 class E2FGVIHDCleaner:
@@ -113,38 +115,54 @@ class E2FGVIHDCleaner:
         self.model.load_state_dict(state)
         self.model.eval()
         self.config = config
+        self.device = device
+
+        # Enable bf16 if configured and supported
+        self.use_bf16 = config.use_bf16 and device.type == "cuda"
+        if self.use_bf16:
+            logger.info("Enabling bf16 inference for E2FGVI_HQ cleaner")
+            # Convert model to bfloat16 for better performance with torch.compile
+            self.model = self.model.to(dtype=torch.bfloat16)
+
+        # Flag to track if artifacts have been saved
+        self._artifacts_saved = False
+
         self.profiling_chunk_size()
         self.auto_compile()
 
     def auto_compile(self):
         if self.config.enable_torch_compile:
             try:
-                if E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS.exists():
+                # Use different cache files for bf16 and fp32 modes
+                self.artifacts_path = E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS_BF16 if self.use_bf16 else E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS
+
+                if self.artifacts_path.exists():
                     logger.info(
-                        f"Loading cached torch compile artifacts from {E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS}"
+                        f"Loading cached torch compile artifacts from {self.artifacts_path}"
                     )
-                    artifact_bytes = E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS.read_bytes()
+                    artifact_bytes = self.artifacts_path.read_bytes()
                     torch.compiler.load_cache_artifacts(artifact_bytes)
-                    self.model = torch.compile(self.model)
+                    # Use default mode for better stability with bf16
+                    compile_mode = "default" #if self.use_bf16 else "max-autotune"
+                    self.model = torch.compile(self.model, mode=compile_mode)
+                    self._artifacts_saved = True  # Already have cached artifacts
 
                 else:
                     logger.info(
-                        f"Compiling model and saving artifacts to {E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS}"
+                        f"Compiling model on first inference. Artifacts will be saved to {self.artifacts_path}"
                     )
-                    self.model = torch.compile(self.model)
-                    # logger.debug(f"Compiled model: {self.model}")
-                    artifacts = torch.compiler.save_cache_artifacts()
-                    if artifacts is not None:
-                        artifact_bytes, cache_info = artifacts
-                        E2FGVI_HQ_TORCH_COMPILE_ARTIFACTS.write_bytes(artifact_bytes)
+                    # Use default mode for bf16 to avoid compilation issues
+                    compile_mode = "default" #if self.use_bf16 else "max-autotune"
+                    logger.info(f"Using torch.compile mode: {compile_mode}")
+                    self.model = torch.compile(self.model, mode=compile_mode)
+                    # Will save artifacts after first inference
 
             except Exception as e:
                 logger.warning(
                     f"Device not support torch compile, or compile failed: {e}. using the original model instead."
                 )
-                from traceback import format_exc
-
-                logger.error(format_exc())
+        else:
+            self.artifacts_path = None  # No artifacts path when compile is disabled
 
     def profiling_chunk_size(self):
         # memory_profiling
@@ -226,6 +244,11 @@ class E2FGVIHDCleaner:
             selected_imgs = imgs_chunk[:1, neighbor_ids + ref_ids, :, :, :]
             selected_masks = masks_chunk[:1, neighbor_ids + ref_ids, :, :, :]
 
+            # Convert inputs to bf16 if model is in bf16 mode
+            if self.use_bf16:
+                selected_imgs = selected_imgs.to(dtype=torch.bfloat16)
+                selected_masks = selected_masks.to(dtype=torch.bfloat16)
+
             with torch.no_grad():
                 masked_imgs = selected_imgs * (1 - selected_masks)
                 mod_size_h = 60
@@ -241,6 +264,9 @@ class E2FGVIHDCleaner:
                 pred_imgs, _ = self.model(masked_imgs, len(neighbor_ids))
                 pred_imgs = pred_imgs[:, :, :h, :w]
                 pred_imgs = (pred_imgs + 1) / 2
+                # Convert BFloat16 to Float32 before numpy conversion (numpy doesn't support BFloat16)
+                if pred_imgs.dtype == torch.bfloat16:
+                    pred_imgs = pred_imgs.float()
                 pred_imgs = pred_imgs.cpu().permute(0, 2, 3, 1).numpy() * 255
 
                 for i in range(len(neighbor_ids)):
@@ -322,6 +348,19 @@ class E2FGVIHDCleaner:
                 torch.cuda.empty_cache()
             except:
                 pass
+
+        # Save torch compile artifacts after first inference
+        if self.config.enable_torch_compile and not self._artifacts_saved:
+            try:
+                artifacts = torch.compiler.save_cache_artifacts()
+                if artifacts is not None:
+                    artifact_bytes, _ = artifacts
+                    self.artifacts_path.write_bytes(artifact_bytes)
+                    logger.info(f"Saved torch compile artifacts to {self.artifacts_path}")
+                    self._artifacts_saved = True
+            except Exception as e:
+                logger.warning(f"Failed to save torch compile artifacts: {e}")
+
         return comp_frames
 
 

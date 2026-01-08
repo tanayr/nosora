@@ -27,9 +27,10 @@ class SoraWM:
         cleaner_type: CleanerType = CleanerType.LAMA,
         enable_torch_compile=ENABLE_E2FGVI_HQ_TORCH_COMPILE,
         detect_batch_size: int = DEFAULT_DETECT_BATCH_SIZE, # default set as four, but can be adjusted...
+        use_bf16: bool = False,  # Enable bf16 inference for E2FGVI_HQ cleaner
     ):
         self.detector = SoraWaterMarkDetector()
-        self.cleaner = WaterMarkCleaner(cleaner_type, enable_torch_compile)
+        self.cleaner = WaterMarkCleaner(cleaner_type, enable_torch_compile, use_bf16=use_bf16)
         self.cleaner_type = cleaner_type
         self.detect_batch_size = detect_batch_size
 
