@@ -43,15 +43,17 @@ ENV PATH="/app/.venv/bin:$PATH"
 RUN pip install --upgrade pip setuptools wheel \
     && pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
+# Install dependencies (without editable install to avoid setuptools issues)
+RUN pip install aiofiles aiosqlite diffusers einops "fastapi==0.108.0" ffmpeg-python \
+    fire greenlet httpx huggingface-hub loguru matplotlib omegaconf opencv-python \
+    pandas pydantic python-multipart requests rich ruptures scikit-learn sqlalchemy \
+    tqdm transformers ultralytics uuid uvicorn psutil mmcv
+
 # Copy the rest of the application
 COPY . .
 
-# Install the application
-RUN pip install -e . --no-deps \
-    && pip install aiofiles aiosqlite diffusers einops "fastapi==0.108.0" ffmpeg-python \
-    fire greenlet httpx huggingface-hub loguru matplotlib omegaconf opencv-python \
-    pandas pydantic python-multipart requests rich ruptures scikit-learn sqlalchemy \
-    tqdm transformers ultralytics uuid uvicorn psutil
+# Add sorawm to Python path
+ENV PYTHONPATH="/app:$PYTHONPATH"
 
 # Build frontend
 WORKDIR /app/frontend
