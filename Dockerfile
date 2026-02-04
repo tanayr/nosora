@@ -18,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     git \
     curl \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Set python3.12 as default
