@@ -2,8 +2,28 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.cnn import ConvModule
-from mmcv.runner import load_checkpoint
+
+# Handle mmcv version differences
+try:
+    from mmcv.cnn import ConvModule
+except ImportError:
+    ConvModule = None
+
+try:
+    from mmcv.runner import load_checkpoint
+except ImportError:
+    try:
+        from mmengine.runner import load_checkpoint
+    except ImportError:
+        # Fallback implementation
+        def load_checkpoint(model, filename, map_location=None, strict=False, logger=None):
+            checkpoint = torch.load(filename, map_location=map_location)
+            if 'state_dict' in checkpoint:
+                state_dict = checkpoint['state_dict']
+            else:
+                state_dict = checkpoint
+            model.load_state_dict(state_dict, strict=strict)
+            return checkpoint
 
 from sorawm.configs import PHY_NET_CHECKPOINT_PATH, PHY_NET_CHECKPOINT_REMOTE_URL
 from sorawm.utils.download_utils import ensure_model_downloaded
