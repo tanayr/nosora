@@ -28,16 +28,22 @@ def clear_gpu_memory():
     Release and reset GPU memory state used by CUDA and PyTorch.
 
     Forces Python garbage collection, clears PyTorch's CUDA memory cache, resets CUDA peak-memory counters, and synchronizes the CUDA device so freed memory is available for subsequent operations.
+    For non-CUDA devices (CPU/MPS), only garbage collection is performed.
     """
     gc.collect()
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
-    torch.cuda.synchronize()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.synchronize()
+    elif torch.backends.mps.is_available():
+        # MPS doesn't have the same memory management APIs
+        # Just trigger garbage collection
+        pass
 
 
 def memory_profiling() -> MemoryProfilingResult:
     """
-    Capture current CUDA memory metrics and return them in gibibytes.
+    Capture current device memory metrics and return them in gibibytes.
 
     Returns:
         MemoryProfilingResult: Dataclass containing:
@@ -46,13 +52,25 @@ def memory_profiling() -> MemoryProfilingResult:
             - torch_memory (float): Memory reserved by PyTorch in GiB.
     """
     clear_gpu_memory()
-    free_memory, total_memory = torch.cuda.mem_get_info()
-    torch_memory = torch.cuda.memory_reserved()
-    result = MemoryProfilingResult(
-        free_memory=free_memory / GiB_bytes,
-        total_memory=total_memory / GiB_bytes,
-        torch_memory=torch_memory / GiB_bytes,
-    )
+    
+    if torch.cuda.is_available():
+        free_memory, total_memory = torch.cuda.mem_get_info()
+        torch_memory = torch.cuda.memory_reserved()
+        result = MemoryProfilingResult(
+            free_memory=free_memory / GiB_bytes,
+            total_memory=total_memory / GiB_bytes,
+            torch_memory=torch_memory / GiB_bytes,
+        )
+    else:
+        # For CPU or MPS, return reasonable defaults
+        # Use system memory info as a fallback
+        import psutil
+        mem = psutil.virtual_memory()
+        result = MemoryProfilingResult(
+            free_memory=mem.available / GiB_bytes,
+            total_memory=mem.total / GiB_bytes,
+            torch_memory=0.0,
+        )
     return result
 
     # result = MemoryProfilingResult()

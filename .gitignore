@@ -254,3 +254,9 @@ profile/*.trace.json.gz.part.2
 profile/*.trace.json.gz.part.3
 profile/*.trace.json.gz.part.4
 profile/*.trace.json.gz.part.5
+
+# Docker & Nginx
+nginx/.htpasswd
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt

@@ -131,7 +131,8 @@ class E2FGVIHDCleaner:
         self.auto_compile()
 
     def auto_compile(self):
-        if self.config.enable_torch_compile:
+        # torch.compile doesn't work well on CPU and can hang - only enable for CUDA
+        if self.config.enable_torch_compile and self.device.type == "cuda":
             try:
                 # Use different cache files for bf16 and fp32 modes
                 self.artifacts_path = (

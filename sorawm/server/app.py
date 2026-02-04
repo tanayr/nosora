@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from sorawm.server.front_router import router as front_router
 from sorawm.server.lifespan import lifespan
@@ -15,6 +16,11 @@ def init_app():
         FastAPI: Configured FastAPI application instance.
     """
     app = FastAPI(lifespan=lifespan)
+
+    @app.get("/health")
+    async def health_check():
+        return JSONResponse({"status": "healthy"})
+
     app.include_router(backend_router, prefix="/api/v1")
     app.include_router(front_router)
     return app

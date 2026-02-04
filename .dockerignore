@@ -1,0 +1,58 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+env
+.eggs
+*.egg-info
+*.egg
+.pytest_cache
+.mypy_cache
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.mp4
+*.avi
+*.mov
+*.mkv
+working_dir/*
+output/*
+input/*
+logs/*
+data/*
+datasets/*
+notebooks/*
+profile/*
+benchmark/*
+tests/*
+
+# Frontend build artifacts (we rebuild in Docker)
+frontend/node_modules
+frontend/dist
+
+# Model checkpoints (downloaded at runtime)
+resources/checkpoint/*.pth
+resources/checkpoint/*.pt
+
+# Misc
+*.log
+*.tmp
+untitled folder*
